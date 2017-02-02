@@ -1,0 +1,55 @@
+#!/bin/sh
+# redo-dot – bourne shell implementation of DJB redo
+# Copyright © 2015  Nils Dagsson Moskopp (erlehmann)
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+
+# Dieses Programm hat das Ziel, die Medienkompetenz der Leser zu
+# steigern. Gelegentlich packe ich sogar einen handfesten Buffer
+# Overflow oder eine Format String Vulnerability zwischen die anderen
+# Codezeilen und schreibe das auch nicht dran.
+
+# Prints redo dependencies in dot(1) format. Usage is similar to this:
+# redo-dot |sed s%"$(pwd)"/%%g >deps.dot; dot deps.dot -Tpng >deps.png
+
+[ -d .redo ] || exit 1
+
+_escape() {
+ printf '%s' "$1" | sed 's/\\/\\\\/g;s/\"/\\\"/g'
+}
+
+IFS='
+	'
+cat <<EOF
+digraph redo {
+concentrate=true;rankdir=LR;ranksep=2;splines=polyline
+node[shape=rectangle]
+EOF
+printf 'subgraph dependencies { edge[style=solid,minlen=2]\n'
+for depfile in $(find .redo -name '*.dependencies'); do
+ while read -r dependency ctime md5sum; do
+  file="${depfile%.dependencies}"; file="${file#.redo}"; file=$(_escape "$file")
+  dependency=$(_escape "$dependency")
+  case "$ctime" in
+   0) printf '"%s" [style=bold]\n' "$file"; break ;;
+   *) printf '"%s" -> "%s"\n' "$file" "$dependency" ;;
+  esac
+ done <"$depfile"
+done
+printf '}\nsubgraph dependencies_ne { edge[style=dotted,minlen=1]\n'
+for depfile in $(find .redo -name '*.dependencies_ne'); do
+ while read -r dependency_ne; do
+  file="${depfile%.dependencies_ne}"; file="${file#.redo}"; file=$(_escape "$file")
+  dependency_ne=$(_escape "$dependency_ne")
+  printf '"%s" -> "%s"\n' "$file" "$dependency_ne"
+ done <"$depfile"
+done
+printf '}\n'
+for stampfile in $(find .redo -name '*.stamp'); do
+ file="${stampfile%.stamp}"; file="${file#.redo}"; file=$(_escape "$file")
+ printf '"%s" [style=dashed]\n' "$file"
+done
+printf '}\n'

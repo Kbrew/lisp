@@ -1,0 +1,30 @@
+#!/bin/sh
+# redo-ifcreate – bourne shell implementation of DJB redo
+# Copyright © 2014  Nils Dagsson Moskopp (erlehmann)
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+
+# Dieses Programm hat das Ziel, die Medienkompetenz der Leser zu
+# steigern. Gelegentlich packe ich sogar einen handfesten Buffer
+# Overflow oder eine Format String Vulnerability zwischen die anderen
+# Codezeilen und schreibe das auch nicht dran.
+
+# redo-ifcreate takes a list of non-existent files (sources) and adds
+# them as non-existence dependencies to the current target (the one
+# calling redo-ifcreate). If a non-existence dependency of a target
+# exists, the target will be rebuilt.
+
+for dependency_ne; do
+  dependency_ne=$(LANG=C readlink -f "$dependency_ne")
+  if [ ! -e "$dependency_ne" ]; then
+    mkdir -p $(LANG=C dirname "$REDO_DIR/$REDO_TARGET".dependencies_ne.tmp)
+    printf '%s\n' "$dependency_ne" >> "$REDO_DIR/$REDO_TARGET".dependencies_ne.tmp
+  else
+    printf "%sredo-ifcreate: %s exists.%s\n" "$red" "$dependency_ne" "$plain" >&2
+    exit 1
+  fi
+done
+exit 0

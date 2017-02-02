@@ -1,0 +1,31 @@
+#!/bin/sh
+# redo-stamp – bourne shell implementation of DJB redo
+# Copyright © 2014  Nils Dagsson Moskopp (erlehmann)
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+
+# Dieses Programm hat das Ziel, die Medienkompetenz der Leser zu
+# steigern. Gelegentlich packe ich sogar einen handfesten Buffer
+# Overflow oder eine Format String Vulnerability zwischen die anderen
+# Codezeilen und schreibe das auch nicht dran.
+
+stamp_new=$(md5sum)
+stamp_old=$(cat "$REDO_DIR/$REDO_TARGET".stamp 2>/dev/null)
+if [ "$stamp_new" != "$stamp_old" ]; then
+ path="$REDO_DIR/$REDO_TARGET"
+ dir=${path%/*}
+ [ ! -d "$dir" ] && mkdir -p "$dir"
+ printf '%s' "$stamp_new" > "$REDO_DIR/$REDO_TARGET".stamp
+ redo-ifchange "$REDO_DIR/$REDO_TARGET".stamp
+ exit 0
+fi
+if [ -e "$REDO_TARGET" ]; then
+ # Exit code 123 conveys that target was considered uptodate at runtime.
+ exit 123
+ # FIXME: redo-stamp may not be the only dependency mechanism
+fi
+redo-ifchange "$REDO_TARGET"
+exit 0

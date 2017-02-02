@@ -1,0 +1,374 @@
+#!/bin/sh
+# redo-ifchange – bourne shell implementation of DJB redo
+# Copyright © 2014  Nils Dagsson Moskopp (erlehmann)
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+
+# Dieses Programm hat das Ziel, die Medienkompetenz der Leser zu
+# steigern. Gelegentlich packe ich sogar einen handfesten Buffer
+# Overflow oder eine Format String Vulnerability zwischen die anderen
+# Codezeilen und schreibe das auch nicht dran.
+
+case $REDO_CUT in
+ '') export REDO_CUT=$(command -v cut)
+esac
+
+case $REDO_STAT in
+ '')
+  if (LANG=C stat -c%Y "$0" >/dev/null 2>&1); then
+   export REDO_STAT=$(command -v stat)
+  else
+   export REDO_STAT='false'
+  fi
+esac
+
+case $REDO_MD5SUM in
+ '')
+  if [ "$(LANG=C : | md5sum)" = "d41d8cd98f00b204e9800998ecf8427e  -" ]; then
+   export REDO_MD5SUM=$(command -v md5sum)
+  elif [ "$(LANG=C : | openssl md5 -r)" = "d41d8cd98f00b204e9800998ecf8427e *stdin" ]; then
+   export REDO_MD5SUM="$(command -v openssl) md5 -r"
+  elif [ "$(LANG=C : | md5)" = "d41d8cd98f00b204e9800998ecf8427e" ]; then
+   export REDO_MD5SUM="$(command -v md5)"
+  else
+   printf "redo needs  md5sum(1), openssl(1) or md5(1).\n" >&2
+   exit 1
+  fi
+esac
+
+_echo_debug_message() {
+ printf '%s' "$@" >&2
+}
+
+case $REDO_DEBUG in
+ 1) ;;
+ *) alias _echo_debug_message=:
+esac
+
+_add_dependency() {
+ parent=$1 dependency=$2
+ # Do not record circular dependencies.
+ [ "$parent" = "$dependency" ] && exit 1
+ local base; _dirsplit "$parent"
+ [ -d "$REDO_DIR/$dir" ] || LANG=C mkdir -p "$REDO_DIR/$dir"
+ ctime_md5sum=$(
+  LANG=C $REDO_STAT -c%Y "$dependency"
+  LANG=C $REDO_MD5SUM < "$dependency"
+ )
+ ctime=${ctime_md5sum%%'
+'*}
+ md5sum=${ctime_md5sum#*'
+'}
+ printf '%s\t%s\t%s\n' "$dependency" "$ctime" "$md5sum" >> \
+  "$REDO_DIR"/"$parent".dependencies.tmp
+ local base; _dirsplit "$dependency"
+ [ -d "$REDO_DIR/$dir" ] || LANG=C mkdir -p "$REDO_DIR/$dir"
+ printf '%s\n' "$ctime" >"$REDO_DIR/$dependency".ctime
+ printf '%s\n' "$md5sum" >"$REDO_DIR/$dependency".md5sum
+}
+
+_add_dependency_ne() {
+ parent="$1" dependency_ne="$2"
+ # Do not record circular dependencies.
+ [ "$parent" = "$dependency_ne" ] && exit 1
+ # Do not record existing files as non-existence dependencies.
+ [ -e "$dependency_ne" ] && return
+ local base; _dirsplit "$parent"
+ [ -d "$REDO_DIR/$dir" ] || LANG=C mkdir -p "$REDO_DIR/$dir"
+ printf '%s\n' "$dependency_ne" >> "$REDO_DIR/$parent".dependencies_ne.tmp
+}
+
+_dependencies_ne_uptodate() {
+ target=$1
+ # If no non-existence dependencies exist, they are by definition up to date.
+ if [ ! -s "$REDO_DIR/$target".dependencies_ne ]; then
+  _echo_debug_message "$target has no non-existence dependencies.
+"
+  return 0
+ fi
+ _echo_debug_message "$target non-existence dependency check:
+"
+ exec 3< "$REDO_DIR/$target".dependencies_ne
+ while read -r dependency_ne <&3; do
+  _echo_debug_message "	$dependency_ne should not exist "
+  # If a non-existence dependency exists, it is out of date.
+  # Dependencies, e.g. on default.do files may also be out of date.
+  # Naive implementation: Pretend target is not up to date and rebuild.
+  if [ -e "$dependency_ne" ]; then
+   _echo_debug_message "and exists.
+"
+   return 1
+  fi
+  _echo_debug_message "and does not.
+"
+ done
+ exec 3>&-
+ _echo_debug_message "$target non-existence dependencies up to date.
+"
+ return 0
+}
+
+_target_uptodate() {
+ target=$1
+ # If a target is a top-level target, it is not up to date.
+ case "$REDO_TARGET" in
+  '') return 1
+ esac
+ # If a target does not exist, it is not up to date.
+ if [ ! -e "$target" ]; then
+  _echo_debug_message "$target does not exist.
+"
+  return 1
+ fi
+ # If .stamp file exists, the target is out of date.
+ if [ -e "$REDO_DIR/$target".stamp ]; then
+  _echo_debug_message "$target is out of date due to redo-stamp.
+"
+  return 1
+ fi
+ [ ! -e "$REDO_DIR/$target".ctime ] && return 1
+ read -r ctime_stored <"$REDO_DIR/$target".ctime
+ _echo_debug_message "$target ctime "
+ ctime_actual="$(LANG=C $REDO_STAT -c%Y "$target")"
+ case $ctime_stored in
+  $ctime_actual)
+   _echo_debug_message "unchanged.
+"
+   return 0
+ esac
+ _echo_debug_message "changed.
+"
+ [ ! -e "$REDO_DIR/$target".md5sum ] && return 1
+ _echo_debug_message "$target md5sum "
+ read -r md5sum_stored <"$REDO_DIR/$target".md5sum
+ IFS=' ' md5sum_actual="$(LANG=C $REDO_MD5SUM < "$target")"
+ IFS='
+	'
+ case $md5sum_stored in
+  $md5sum_actual)
+   _echo_debug_message "unchanged.
+"
+   # If stored md5sum of target matches actual md5sum, but stored
+   # ctime does not, redo needs to update stored ctime of target.
+   LANG=C $REDO_STAT -c%Y "$target" >"$REDO_DIR/$target".ctime
+   return 0
+  esac
+ _echo_debug_message "changed.
+"
+ return 1
+}
+
+_dependencies_uptodate() {
+ target=$1
+ target_depfile="$REDO_DIR/$target".dependencies
+ # If no dependencies exist, they are by definition up to date.
+ if [ ! -e "$target_depfile" ]; then
+  _echo_debug_message "$target has no dependencies.
+"
+  return 0
+ fi
+ _echo_debug_message "$target dependency check:
+"
+ # If any dependency does not exist, the target is out of date.
+ IFS='
+	'
+ LANG=C $REDO_STAT -c%Y $(LANG=C $REDO_CUT -f1 "$target_depfile") > \
+  "$target_depfile".ctimes 2>&- || return 1
+ exec 3< "$target_depfile".ctimes
+ exec 4< "$target_depfile"
+ while read -r ctime_actual <&3 && read -r dependency ctime_stored md5sum_stored <&4; do
+  # If a .stamp file exists, the dependency is out of date.
+  if [ -e "$REDO_DIR/$dependency".stamp ]; then
+   _echo_debug_message "	$dependency is always out of date.
+"
+   return 1
+  fi
+  # If a dependency of a dependency is out of date, the dependency is out of date.
+  if ( ! _dependencies_uptodate "$dependency" ); then
+   return 1
+  fi
+  # If the ctime of a dependency did not change, the dependency is up to date.
+  _echo_debug_message "	$dependency ctime "
+  case $ctime_stored in
+   $ctime_actual)
+    _echo_debug_message "unchanged.
+"
+    continue
+  esac
+  # If the md5sum of a dependency did not change, the dependency is up to date.
+  _echo_debug_message "changed.
+	$dependency md5sum "
+  OLDIFS=$IFS
+  IFS=' ' md5sum_actual="$(LANG=C $REDO_MD5SUM < "$dependency")"
+  IFS=$OLDIFS
+  case $md5sum_stored in
+   $md5sum_actual)
+    _echo_debug_message "unchanged.
+"
+    continue
+  esac
+  # if both ctime and md5sum did change, the dependency is out of date.
+  _echo_debug_message "changed.
+"
+  return 1
+ done
+ exec 4>&-
+ exec 3>&-
+ _echo_debug_message "$target dependencies up to date.
+"
+ # If a non-existence dependency is out of date, the target is out of date.
+ if ( ! _dependencies_ne_uptodate "$target" ); then
+  return 1
+ fi
+ return 0
+}
+
+_dirsplit() {
+ base=${1##*/}
+ dir=${1%"$base"}
+}
+
+_do() {
+ local dir="$1" target="$2" tmp="$3"
+ target_abspath="$PWD/$target"
+ target_relpath="${target_abspath#$REDO_BASE/}"
+ # If target is not up to date or its dependencies are not up to date, build it.
+ if (
+  ! _target_uptodate "$target_abspath" || \
+  ! _dependencies_uptodate "$target_abspath"
+ ); then
+  dofile="$target".do
+  base="$target"
+  ext=
+  [ -e "$target.do" ] || _find_dofile "$target" && base=${target%$ext}
+  if [ ! -e "$dofile" ]; then
+   # If .do file does not exist and target exists, it is a source file.
+   if [ -e "$target_abspath" ]; then
+    _add_dependency "$REDO_TARGET" "$target_abspath"
+    # Remove dependencies and non-existence dependencies that the
+    # target file might have had. When a target that was built by
+    # redo has its dofile removed, it becomes a source file and
+    # should not be rebuilt constantly due to a missing dofile.
+    [ -e "$REDO_DIR/$target_abspath".dependencies ] && \
+     LANG=C rm -f "$REDO_DIR/$target_abspath".dependencies >&2
+    [ -e "$REDO_DIR/$target_abspath".dependencies_ne ] && \
+     LANG=C rm -f "$REDO_DIR/$target_abspath".dependencies_ne >&2
+    return 0
+   # If .do file does not exist and target does not exist, stop.
+   else
+    echo "redo: $target: no .do file" >&2
+    exit 1
+   fi
+  fi
+  case ${#REDO_DEPTH} in
+   200)
+    printf 'Maximum recursion depth exceeded.\n' >&2
+    exit 1
+  esac
+  printf '%sredo %s%s%s%s%s\n' \
+   "$green" "$REDO_DEPTH" "$bold" "$target_relpath" "$plain" >&2
+  ( _run_dofile "$target" "${base##*/}" "$tmp.tmp" )
+  rv="$?"
+  # Add non existing .do file to non-existence dependencies so
+  # target is built when .do file in question is created.
+  [ -e "$target.do" ] || _add_dependency_ne "$target_abspath" "$PWD/$target.do"
+  # Add .do file to dependencies so target is built when .do file changes.
+  _add_dependency "$target_abspath" "$PWD/$dofile"
+  if [ $rv != 0 ]; then
+   LANG=C rm -f ./"$tmp.tmp" ./"$tmp.tmp2"
+   # Exit code 123 conveys that target was considered up to date at runtime.
+   if [ $rv != 123 ]; then
+    printf "%sredo: %s%s: got exit code %s.%s\n" \
+     "$red" "$REDO_DEPTH" "$target" "$rv" "$plain" >&2
+    exit 1
+   fi
+  fi
+  if [ -s "$tmp.tmp" ]; then
+   LANG=C mv ./"$tmp.tmp" ./"$target" 2>&-
+  elif [ -s "$tmp.tmp2" ]; then
+   LANG=C mv ./"$tmp.tmp2" ./"$target" 2>&-
+  fi
+  [ -e "$tmp.tmp2" ] && LANG=C rm -f ./"$tmp.tmp2"
+  # After build is finished, update dependencies.
+  : >> "$REDO_DIR/$target_abspath".dependencies.tmp
+  : >> "$REDO_DIR/$target_abspath".dependencies_ne.tmp
+  LANG=C mv "$REDO_DIR/$target_abspath".dependencies.tmp \
+   "$REDO_DIR/$target_abspath".dependencies >&2
+  LANG=C mv "$REDO_DIR/$target_abspath".dependencies_ne.tmp \
+   "$REDO_DIR/$target_abspath".dependencies_ne >&2
+ fi
+ # Some do files (like all.do) do not usually generate output.
+ if [ -e "$target_abspath" ]; then
+  # Record dependency on parent target.
+  if [ -n "$REDO_TARGET" ]; then
+   _add_dependency "$REDO_TARGET" "$target_abspath"
+  else
+   local base; _dirsplit "$target_abspath"
+   [ -d "$REDO_DIR/$dir" ] || LANG=C mkdir -p "$REDO_DIR/$dir"
+   LANG=C $REDO_STAT -c%Y "$target_abspath" > \
+    "$REDO_DIR/$target_abspath".ctime
+   LANG=C $REDO_MD5SUM <"$target_abspath" > \
+    "$REDO_DIR/$target_abspath".md5sum
+  fi
+ fi
+}
+
+_find_dofile() {
+ local prefix=
+ while :; do
+  _find_dofile_pwd "$1"
+  [ -e "$dofile" ] && break
+  [ "$PWD" = "/" ] && break
+  target=${PWD##*/}/"$target"
+  tmp=${PWD##*/}/"$tmp"
+  prefix=${PWD##*/}/"$prefix"
+  cd ..
+ done
+ base="$prefix""$base"
+}
+
+_find_dofile_pwd() {
+ dofile=default."$1".do
+ while :; do
+  dofile=default.${dofile#default.*.}
+  [ -e "$dofile" -o "$dofile" = default.do ] && break
+ done
+ ext=${dofile#default}
+ ext=${ext%.do}
+ base=${1%$ext}
+}
+
+_run_dofile() {
+ export REDO_DEPTH="$REDO_DEPTH  "
+ export REDO_TARGET="$PWD"/"$target"
+ local line1
+ set -e
+ read -r line1 <"$PWD/$dofile" || true
+ cmd=${line1#"#!"}
+ # If the first line of a do file does not have a hashbang (#!), use /bin/sh.
+ if [ "$cmd" = "$line1" ] || [ "$cmd" = "/bin/sh" ]; then
+  if [ "$REDO_XTRACE" = "1" ]; then
+   cmd="/bin/sh -ex"
+  else
+   cmd="/bin/sh -e"
+  fi
+ fi
+ $cmd "$PWD/$dofile" "$@" >"$tmp.tmp2"
+}
+
+set +e
+if [ -n "$1" ]; then
+ for target; do
+  # If relative path to target is given, convert to absolute absolute path.
+  case "$target" in
+   /*) ;;
+   *)  target="$PWD"/"$target" >&2
+  esac
+  _dirsplit "$target"
+  ( cd "$dir" && _do "$dir" "$base" "$base" )
+  [ "$?" = 0 ] || exit 1
+ done
+fi

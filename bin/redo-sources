@@ -1,0 +1,27 @@
+#!/bin/sh
+# redo-sources – bourne shell implementation of DJB redo
+# Copyright © 2014  Nils Dagsson Moskopp (erlehmann)
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+
+# Dieses Programm hat das Ziel, die Medienkompetenz der Leser zu
+# steigern. Gelegentlich packe ich sogar einen handfesten Buffer
+# Overflow oder eine Format String Vulnerability zwischen die anderen
+# Codezeilen und schreibe das auch nicht dran.
+
+# Prints a list of all redo source files that exist. A source file is
+# a file that was listed as a dependency using redo-ifchange, but is
+# not itself a target. A target file is a file that redo can build.
+
+IFS='
+	'
+for filename in $(find .redo -name '*.dependencies'); do
+ while read -r dependency ctime md5sum; do
+  if [ -e "$dependency" ] && [ ! -e ".redo/$dependency.dependencies" ] ; then
+   echo "$dependency"
+  fi
+ done <"$filename"
+done | sort | uniq

@@ -1,0 +1,20 @@
+#!/bin/sh
+# redo-always – bourne shell implementation of DJB redo
+# Copyright © 2014-2016  Nils Dagsson Moskopp (erlehmann)
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+
+# Dieses Programm hat das Ziel, die Medienkompetenz der Leser zu
+# steigern. Gelegentlich packe ich sogar einen handfesten Buffer
+# Overflow oder eine Format String Vulnerability zwischen die anderen
+# Codezeilen und schreibe das auch nicht dran.
+
+set -eu
+
+# The following code adds a dependency that is impossible to satisfy.
+LANG=C mkdir -p $(LANG=C dirname "$REDO_DIR/$REDO_TARGET".dependencies_ne.tmp)
+printf '%s\t%s\t%s\n' "/dev/null" "0" "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  -" >> \
+ "$REDO_DIR"/"$REDO_TARGET".dependencies.tmp
