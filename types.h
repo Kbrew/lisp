@@ -60,3 +60,7 @@ typedef union Object
 	Cons cons;
 	Nil nil;
 } Object;
+
+bool is_boolean(Object *obj);
+bool is_false(Object *obj);
+bool is_true(Object *obj);
