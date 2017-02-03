@@ -18,6 +18,8 @@ typedef enum
 	NIL,
 } ObjectType;
 
+typedef union Object Object;
+
 typedef struct Integer
 {
 	ObjectType type;
@@ -54,7 +56,7 @@ typedef struct Nil
 	ObjectType type;
 } Nil;
 
-typedef union
+typedef union Object
 {
 	ObjectType type;
 	Integer integer;
@@ -159,13 +161,39 @@ void init(){
 
 /***************************** READ ******************************/
 
+bool is_open_paren(char c){
+	return
+		c == '(' ||
+		c == '[' ||
+		c == '{';
+}
+
+bool is_close_paren(char c){
+	return
+		c == ')' ||
+		c == ']' ||
+		c == '}';
+}
+
+bool is_matching_paren(char c1, char c2){
+	switch(c1){
+		case '(':
+			return c2 == ')';
+		case '[':
+			return c2 == ']';
+		case '{':
+			return c2 == '}';
+		default:
+			return false;
+	}
+}
+
 char is_delimiter(int c) {
     return isspace(c) ||
-	       c == EOF   ||
-		   c == '('   ||
-		   c == ')'   ||
-		   c == '"'   ||
-		   c == ';'   ;
+	       is_open_paren(c) ||
+		   is_close_paren(c) ||
+		   c == '"' ||
+		   c == ';' ;
 }
 
 int peek(FILE *in) {
@@ -270,7 +298,7 @@ char read_escaped_string_char(FILE *in)
 Object *read_string(FILE *in)
 {
 	int c;
-	int i;
+	int len;
 	char buffer[BUFFER_MAX];
 	
 	c = getc(in);
@@ -279,14 +307,14 @@ Object *read_string(FILE *in)
 		exit(1);
 	}
 	
-	i = 0;
+	len = 0;
 	while ((c = peek(in)) != '"') {
 		c = read_escaped_string_char(in);
 
         /* subtract 1 to save space for '\0' terminator */
-        if (i < BUFFER_MAX - 1) {
-            buffer[i] = c;
-			i += 1;
+        if (len < BUFFER_MAX - 1) {
+            buffer[len] = c;
+			len += 1;
 		}
 		else {
 			fprintf(
@@ -295,11 +323,85 @@ Object *read_string(FILE *in)
 				BUFFER_MAX);
 			exit(1);
         }
-        buffer[i] = '\0';
+        buffer[len] = '\0';
 	}
 	getc(in); //drain the peeked '"'
 	
 	return make_string(buffer);
+}
+
+bool is_symbol_char(char c)
+{
+	return !is_delimiter(c);
+}
+
+Object *read_symbol(FILE *in)
+{
+	int c;
+	int len;
+	char buffer[BUFFER_MAX];
+	
+	c = peek(in);
+	if(!is_symbol_char(c)){
+		fprintf(stderr, "illegal symbol char, found '%c'\n", c);
+		exit(1);
+	}
+	
+	len = 0;
+	while (is_symbol_char(c = getc(in))) {
+        /* subtract 1 to save space for '\0' terminator */
+        if (len < BUFFER_MAX - 1) {
+            buffer[len] = c;
+			len += 1;
+		}
+		else {
+			fprintf(
+				stderr, 
+				"string too long. Maximum length is %d\n",
+				BUFFER_MAX);
+			exit(1);
+        }
+        buffer[len] = '\0';
+	}
+	ungetc(c, in); //drain the peeked '"'
+	
+	return make_symbol(buffer);	
+}
+
+Object *read_value(FILE *in);
+
+Object *read_list_tail(FILE *in)
+{
+	Object *head, *tail;
+	eat_whitespace(in);
+	if(is_close_paren(peek(in))){
+		return make_nil();
+	} else {
+		head = read_value(in);
+		tail = read_list_tail(in);
+		return make_cons(head, tail);
+	}
+}
+
+Object *read_list(FILE *in){
+	int open_paren, close_paren;
+	Object *obj;
+	
+	open_paren = getc(in);
+	if( !is_open_paren(open_paren) ){
+		printf("invalid opening paren '%c'", open_paren);
+		exit(1);
+	}
+	
+	obj = read_list_tail(in);
+	
+	close_paren = getc(in);
+	if( !is_matching_paren(open_paren, close_paren) ){
+		printf("non matching parens '%c' and '%c'", open_paren, close_paren);
+		exit(1);
+	}
+	
+	return obj;
 }
 	
 
@@ -313,9 +415,10 @@ Object *read_value(FILE *in)
 		return read_integer(in);
 	}else if(c == '"'){
 		return read_string(in);
+	}else if(is_open_paren(c)){
+		return read_list(in);
 	}else{
-        fprintf(stderr, "bad input. Unexpected '%c'\n", c);
-        exit(1);
+        return read_symbol(in);
 	}
 }
 
@@ -365,6 +468,30 @@ void write(Object *obj) {
             }
             putchar('"');
 			break;
+		case SYMBOL:
+            str_ptr = obj->string.value;
+			printf("%s", str_ptr);
+			break;
+		case CONS:
+			putchar('(');
+			write(obj->cons.head);
+			
+			Object *tail;
+			tail = obj->cons.tail;
+			while(tail->type == CONS){
+				putchar(' ');
+				write(tail->cons.head);
+				tail = tail->cons.tail;
+			}
+			if(tail->type != NIL){
+				printf(" . ");
+				write(tail);
+			}
+			putchar(')');
+			break;
+		case NIL:
+			printf("()");
+			break;
         default:
             fprintf(stderr, "cannot write unknown type\n");
             exit(1);
@@ -375,7 +502,7 @@ void write(Object *obj) {
 
 int main(void) {
 	Object *value;
-
+	
     printf("Welcome to Bootstrap Scheme. "
            "Use ctrl-c to exit.\n");
 
@@ -386,6 +513,7 @@ int main(void) {
 		fflush(stdout);
 		eat_whitespace(stdin);
 		value = eval(read_value(stdin));
+		while ( getc(stdin) != '\n' ) {}
 		write(value);
         printf("\n");
 		fflush(stdout);
