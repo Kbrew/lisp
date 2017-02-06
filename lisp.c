@@ -4,8 +4,8 @@
 #include <ctype.h>
 
 #include "types.h"
-#include "make.h"
 #include "read.h"
+#include "print.h"
 
 /***************************** FUNCTIONS ******************************/
 	
@@ -21,10 +21,6 @@ Object *eval(Object *exp) {
     return exp;
 }
 
-/**************************** PRINT ******************************/
-
-
-
 /***************************** REPL ******************************/
 
 int main(void) {
@@ -39,12 +35,13 @@ int main(void) {
         printf("> ");
 		fflush(stdout);
 		eat_whitespace(stdin);
-		value = eval(read_value(stdin));
+		value = eval(read_object(stdin));
 		while ( getc(stdin) != '\n' ) {}
-		write(value);
+		print_object(stdout, value);
         printf("\n");
 		fflush(stdout);
     }
 
     return 0;
 }
+
