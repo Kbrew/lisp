@@ -1,0 +1,6 @@
+(module "module_name"
+	(define-type "my_type" (struct i32 i64))
+	(define-function void "sum" ((i32 x) (i32 y))
+		(return (add x y))
+	)
+)
