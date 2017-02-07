@@ -25,6 +25,7 @@ Object *eval(Object *exp) {
 
 int main(void) {
 	Object *value;
+	int c;
 	
     printf("Welcome to Bootstrap Scheme. "
            "Use ctrl-c to exit.\n");
@@ -36,9 +37,20 @@ int main(void) {
 		fflush(stdout);
 		eat_whitespace(stdin);
 		value = eval(read_object(stdin));
-		while ( getc(stdin) != '\n' ) {}
+		
+		bool line_empty = true;
+		while ( (c = getc(stdin)) != '\n' ) {
+			if(!is_whitespace(c)){
+				line_empty = false;
+			}
+		}
 		print_object(stdout, value);
         printf("\n");
+		
+		if(!line_empty){
+			printf("Unexpected input after value was read\n");
+		}
+		
 		fflush(stdout);
     }
 
