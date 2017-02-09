@@ -2,56 +2,54 @@
 
 #include <stdbool.h>
 
-typedef enum
-{
+typedef enum {
 	BOOLEAN,
 	INTEGER,
 	SYMBOL,
 	STRING,
 	CONS,
 	NIL,
+	PRIMATIVE_FORM
 } ObjectType;
 
 typedef union Object Object;
 
-typedef struct Integer
-{
+typedef struct Integer {
 	ObjectType type;
 	int value;
 } Integer;
 
-typedef struct Boolean
-{
+typedef struct Boolean {
 	ObjectType type;
 	bool value;
 } Boolean;
 
-typedef struct Symbol
-{
+typedef struct Symbol {
 	ObjectType type;
 	char *value;
 } Symbol;
 
-typedef struct String
-{
+typedef struct String {
 	ObjectType type;
 	char *value;
 } String;
 
-typedef struct Cons
-{
+typedef struct Cons {
 	ObjectType type;
-	Object* head;
-	Object* tail;
+	Object *head;
+	Object *tail;
 } Cons;
 
-typedef struct Nil
-{
-	ObjectType type;
-} Nil;
+typedef struct Nil { ObjectType type; } Nil;
 
-typedef union Object
-{
+typedef void form_fn(Object *args);
+
+typedef struct PrimativeForm {
+	ObjectType type;
+	form_fn* fn;
+}
+
+typedef union Object {
 	ObjectType type;
 	Integer integer;
 	Boolean boolean;

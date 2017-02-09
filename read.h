@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stdio.h>
 #include "types.h"
+#include <stdio.h>
 
 int peek(FILE *in);
 void eat_whitespace(FILE *in);

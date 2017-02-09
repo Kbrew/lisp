@@ -6,8 +6,6 @@
 
 #include "print.h"
 
-
-
 void print_object(FILE *out, Object *obj);
 void print_boolean(FILE *out, Object *obj);
 void print_integer(FILE *out, Object *obj);
