@@ -41,12 +41,12 @@ int main(void) {
 		}
 		print_object(stdout, value);
 		printf("\n");
+		fflush(stdout);
 
 		if (!line_empty) {
-			printf("Unexpected input after value was read\n");
+			fprintf(stderr, "Unexpected input after value was read\n");
+			fflush(stderr);
 		}
-
-		fflush(stdout);
 	}
 
 	return 0;

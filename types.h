@@ -2,6 +2,8 @@
 
 #include <stdbool.h>
 
+#include "uthash.h"
+
 typedef enum {
 	BOOLEAN,
 	INTEGER,
@@ -42,11 +44,35 @@ typedef struct Cons {
 
 typedef struct Nil { ObjectType type; } Nil;
 
-typedef void form_fn(Object *args);
+typedef void primative_form_fn(Context *ctx, Object *args);
 
 typedef struct PrimativeForm {
 	ObjectType type;
-	form_fn* fn;
+	primative_form_fn* fn;
+} PrimativeForm;
+
+typedef struct SourceLocation{
+	char *file_name;
+	uint line;
+	uint col;
+} SourceLocation;
+
+typedef struct Scope {
+	uint id;
+	char *name;
+	SourceLocation loc;
+}
+
+typedef struct Syntax {
+	ObjectType type;
+	SourceLocation loc;
+	usize scope_set_size;
+	Scope *scope_set;
+} Syntax;	
+
+typedef struct ParseStream {
+	FILE *file;
+	SourceLocation loc;
 }
 
 typedef union Object {
