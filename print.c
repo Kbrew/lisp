@@ -88,4 +88,6 @@ void print_symbol(FILE *out, Object *obj) {
 	fprintf(out, "%s", obj->string.value);
 }
 
-void print_nil(FILE *out, Object *obj) { fprintf(out, "()"); }
+void print_nil(FILE *out, Object *obj) { 
+	fprintf(out, "()");
+}

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #include "uthash.h"
 
@@ -44,36 +46,40 @@ typedef struct Cons {
 
 typedef struct Nil { ObjectType type; } Nil;
 
-typedef void primative_form_fn(Context *ctx, Object *args);
+// typedef void primative_form_fn(Context *ctx, Object *args);
 
-typedef struct PrimativeForm {
-	ObjectType type;
-	primative_form_fn* fn;
-} PrimativeForm;
+// typedef struct PrimativeForm {
+	// ObjectType type;
+	// primative_form_fn* fn;
+// } PrimativeForm;
 
 typedef struct SourceLocation{
 	char *file_name;
-	uint line;
-	uint col;
+	unsigned int line;
+	unsigned int col;
 } SourceLocation;
 
 typedef struct Scope {
-	uint id;
+	unsigned int id;
 	char *name;
 	SourceLocation loc;
-}
+} Scope;
+
+typedef struct ScopeSet{
+	size_t size;
+	Scope scopes[];
+} ScopeSet;
 
 typedef struct Syntax {
-	ObjectType type;
+	Object *value;
 	SourceLocation loc;
-	usize scope_set_size;
-	Scope *scope_set;
+	ScopeSet *scope_set;
 } Syntax;	
 
 typedef struct ParseStream {
 	FILE *file;
 	SourceLocation loc;
-}
+} ParseStream;
 
 typedef union Object {
 	ObjectType type;
