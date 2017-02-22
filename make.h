@@ -18,5 +18,3 @@ Scope make_scope();
 ScopeSet make_scope_set();
 
 Syntax make_syntax();
-
-ParseStream make_parse_stream();

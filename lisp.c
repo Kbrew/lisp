@@ -30,7 +30,7 @@ int main(void) {
 	while (1) {
 		printf("> ");
 		fflush(stdout);
-		eat_whitespace(stdin);
+		skip_whitespace(stdin);
 		value = eval(read_object(stdin));
 
 		bool line_empty = true;

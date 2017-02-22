@@ -46,41 +46,6 @@ typedef struct Cons {
 
 typedef struct Nil { ObjectType type; } Nil;
 
-// typedef void primative_form_fn(Context *ctx, Object *args);
-
-// typedef struct PrimativeForm {
-	// ObjectType type;
-	// primative_form_fn* fn;
-// } PrimativeForm;
-
-typedef struct SourceLocation{
-	char *file_name;
-	unsigned int line;
-	unsigned int col;
-} SourceLocation;
-
-typedef struct Scope {
-	unsigned int id;
-	char *name;
-	SourceLocation loc;
-} Scope;
-
-typedef struct ScopeSet{
-	size_t size;
-	Scope scopes[];
-} ScopeSet;
-
-typedef struct Syntax {
-	Object *value;
-	SourceLocation loc;
-	ScopeSet *scope_set;
-} Syntax;	
-
-typedef struct ParseStream {
-	FILE *file;
-	SourceLocation loc;
-} ParseStream;
-
 typedef union Object {
 	ObjectType type;
 	Integer integer;
@@ -90,7 +55,3 @@ typedef union Object {
 	Cons cons;
 	Nil nil;
 } Object;
-
-bool is_boolean(Object *obj);
-bool is_false(Object *obj);
-bool is_true(Object *obj);

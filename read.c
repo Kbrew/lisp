@@ -39,7 +39,7 @@ int peek(FILE *in) {
 	return c;
 }
 
-void eat_whitespace(FILE *in) {
+void skip_whitespace(FILE *in) {
 	int c;
 
 	while ((c = getc(in)) != EOF) {
@@ -194,7 +194,7 @@ Object *read_symbol(FILE *in) {
 
 Object *read_list_tail(FILE *in) {
 	Object *head, *tail;
-	eat_whitespace(in);
+	skip_whitespace(in);
 	if (is_close_paren(peek(in))) {
 		return make_nil();
 	} else {
